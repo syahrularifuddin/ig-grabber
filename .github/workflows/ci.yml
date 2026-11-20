@@ -21,7 +21,17 @@ jobs:
         with:
           workspaces: backend
       # btls-sys (wreq) builds BoringSSL and runs bindgen -> needs cmake + libclang
-      - run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
+      # (cmake is preinstalled but libclang is not). GitHub's default apt CDN
+      # (azure.archive.ubuntu.com) throttles to ~50 kB/s — a 47 MB install took
+      # 14 min in #44796311565. Swap to a fast mirror and cache the packages so
+      # only the first run (or after cache eviction) hits the network.
+      - name: Swap in a fast apt mirror
+        run: sudo sed -i 's|azure\.archive\.ubuntu\.com|mirrors.edge.kernel.org|g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources || true
+      - uses: awalsh128/cache-apt-pkgs-action@v1.6.3
+        with:
+          packages: cmake libclang-dev
+          version: ubuntu-24.04-v1
+          empty_packages_behavior: error
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
