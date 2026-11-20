@@ -106,16 +106,16 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           script_stop: true
           envs: VPS_MODE,DEPLOY_DIR
+          script: |
+            cd "$DEPLOY_DIR"
+            COMPOSE="docker compose"
+            if [ "$VPS_MODE" = "instabox" ]; then
+              cp Caddyfile.http Caddyfile
+              COMPOSE="docker compose -f compose.yaml -f compose.instabox.yaml"
+            fi
+            $COMPOSE pull || true  # GHCR images may be private; local builds still serve
+            $COMPOSE up -d --remove-orphans
+            docker image prune -f
         env:
           VPS_MODE: ${{ secrets.VPS_MODE || 'standard' }}
           DEPLOY_DIR: ${{ secrets.VPS_TARGET_PATH || '/opt/ig' }}
-        script: |
-          cd "$DEPLOY_DIR"
-          COMPOSE="docker compose"
-          if [ "$VPS_MODE" = "instabox" ]; then
-            cp Caddyfile.http Caddyfile
-            COMPOSE="docker compose -f compose.yaml -f compose.instabox.yaml"
-          fi
-          $COMPOSE pull || true  # GHCR images may be private; local builds still serve
-          $COMPOSE up -d --remove-orphans
-          docker image prune -f
