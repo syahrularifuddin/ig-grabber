@@ -84,14 +84,18 @@ async fn try_media_info(
         ));
     }
     if !(200..300).contains(&status) {
-        return Err(ApiError::Upstream(format!("media info failed (HTTP {status})")));
+        return Err(ApiError::Upstream(format!(
+            "media info failed (HTTP {status})"
+        )));
     }
     let v: Value = serde_json::from_str(&text)
         .map_err(|_| ApiError::Upstream("non-JSON media info response".into()))?;
 
     let item = &v["items"][0];
     if item.is_null() {
-        return Err(ApiError::Upstream("media info response had no items".into()));
+        return Err(ApiError::Upstream(
+            "media info response had no items".into(),
+        ));
     }
 
     let mut items = Vec::new();
@@ -108,7 +112,9 @@ async fn try_media_info(
         }
     }
     if items.is_empty() {
-        return Err(ApiError::Upstream("media info contained no downloadable media".into()));
+        return Err(ApiError::Upstream(
+            "media info contained no downloadable media".into(),
+        ));
     }
 
     Ok(PostResponse {
@@ -155,7 +161,10 @@ async fn try_graphql(http: &wreq::Client, shortcode: &str) -> Option<Value> {
         let resp = http
             .post("https://www.instagram.com/api/graphql")
             .header("x-fb-lsd", LSD)
-            .header("referer", format!("https://www.instagram.com/p/{shortcode}/"))
+            .header(
+                "referer",
+                format!("https://www.instagram.com/p/{shortcode}/"),
+            )
             .form(&params)
             .send()
             .await
@@ -195,7 +204,9 @@ fn media_to_post(shortcode: &str, media: &Value) -> ApiResult<PostResponse> {
             .as_str()
             .map(str::to_string),
         author_username: media["owner"]["username"].as_str().map(str::to_string),
-        author_avatar: media["owner"]["profile_pic_url"].as_str().map(str::to_string),
+        author_avatar: media["owner"]["profile_pic_url"]
+            .as_str()
+            .map(str::to_string),
         items,
     })
 }
@@ -253,7 +264,9 @@ async fn try_embed(http: &wreq::Client, shortcode: &str) -> Option<PostResponse>
         if !resp.status().is_success() {
             continue;
         }
-        let Ok(html) = resp.text().await else { continue };
+        let Ok(html) = resp.text().await else {
+            continue;
+        };
         if let Some(post) = parse_embed(&html, shortcode) {
             return Some(post);
         }
@@ -281,14 +294,11 @@ fn parse_embed(html: &str, shortcode: &str) -> Option<PostResponse> {
                     return Some(PostResponse {
                         shortcode: shortcode.to_string(),
                         kind: kind_of(&items),
-                        caption: item["caption"]
-                            .as_str()
-                            .map(str::to_string)
-                            .or_else(|| {
-                                item["edge_media_to_caption"]["edges"][0]["node"]["text"]
-                                    .as_str()
-                                    .map(str::to_string)
-                            }),
+                        caption: item["caption"].as_str().map(str::to_string).or_else(|| {
+                            item["edge_media_to_caption"]["edges"][0]["node"]["text"]
+                                .as_str()
+                                .map(str::to_string)
+                        }),
                         author_username: item["user"]["username"].as_str().map(str::to_string),
                         author_avatar: item["user"]["profile_pic_url"].as_str().map(str::to_string),
                         items,
@@ -324,12 +334,11 @@ fn parse_embed(html: &str, shortcode: &str) -> Option<PostResponse> {
 
 /// Last resort: og: meta tags on the canonical post page.
 async fn try_og(http: &wreq::Client, shortcode: &str) -> Option<PostResponse> {
-    let resp = super::util::as_navigation(
-        http.get(format!("https://www.instagram.com/p/{shortcode}/")),
-    )
-    .send()
-    .await
-    .ok()?;
+    let resp =
+        super::util::as_navigation(http.get(format!("https://www.instagram.com/p/{shortcode}/")))
+            .send()
+            .await
+            .ok()?;
     let html = resp.text().await.ok()?;
 
     let video = meta_content(&html, "og:video");

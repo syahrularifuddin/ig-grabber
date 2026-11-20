@@ -5,18 +5,26 @@ use crate::error::{ApiError, ApiResult};
 use crate::models::{SessionStatus, StoryItem, StoryResponse};
 
 use super::profile;
-use super::util::{as_navigation, best_candidate, extract_json_object, form_urlencode, value_to_string};
+use super::util::{
+    as_navigation, best_candidate, extract_json_object, form_urlencode, value_to_string,
+};
 
 /// Check whether the configured sessionid cookie is currently accepted by
 /// Instagram. The reels_tray feed answers 200 for a valid session.
 pub async fn check_session(state: &AppState) -> SessionStatus {
     let s = state.session.read().expect("session lock poisoned").clone();
     let Some(_) = s.session_id else {
-        return SessionStatus { configured: false, valid: false };
+        return SessionStatus {
+            configured: false,
+            valid: false,
+        };
     };
 
     let valid = probe_tray(&s.authed_http).await;
-    SessionStatus { configured: true, valid }
+    SessionStatus {
+        configured: true,
+        valid,
+    }
 }
 
 /// Probe the reels tray feed — 200 means the cookie is accepted.
@@ -93,8 +101,14 @@ pub async fn fetch_stories(
         let image = best_candidate(&it["image_versions2"]["candidates"]);
         let video = best_candidate(&it["video_versions"]);
         let kind = if media_type == 2 { "video" } else { "image" };
-        let chosen = if kind == "video" { video.or_else(|| image.clone()) } else { image.clone() };
-        let Some((url, width, height)) = chosen else { continue };
+        let chosen = if kind == "video" {
+            video.or_else(|| image.clone())
+        } else {
+            image.clone()
+        };
+        let Some((url, width, height)) = chosen else {
+            continue;
+        };
 
         out.push(StoryItem {
             id: value_to_string(&it["pk"])
@@ -145,19 +159,22 @@ async fn fetch_fb_dtsg(http: &wreq::Client) -> ApiResult<String> {
             "homepage request failed (HTTP {status})"
         )));
     }
-    let Some(eqmc) = html.find("__eqmc").map(|i| &html[i..(i + 4000).min(html.len())]) else {
+    let Some(eqmc) = html
+        .find("__eqmc")
+        .map(|i| &html[i..(i + 4000).min(html.len())])
+    else {
         return Err(ApiError::Upstream(
             "homepage did not contain the fb_dtsg blob".into(),
         ));
     };
-    let obj = extract_json_object(eqmc, "").ok_or_else(|| {
-        ApiError::Upstream("homepage did not contain the fb_dtsg blob".into())
-    })?;
+    let obj = extract_json_object(eqmc, "")
+        .ok_or_else(|| ApiError::Upstream("homepage did not contain the fb_dtsg blob".into()))?;
     let v: Value = serde_json::from_str(obj)
         .map_err(|_| ApiError::Upstream("could not parse the fb_dtsg blob".into()))?;
-    v["f"].as_str().map(str::to_string).ok_or_else(|| {
-        ApiError::Upstream("fb_dtsg missing from homepage blob".into())
-    })
+    v["f"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| ApiError::Upstream("fb_dtsg missing from homepage blob".into()))
 }
 
 /// POST the persisted stories query and return the `items` array of the
@@ -188,7 +205,10 @@ async fn stories_items(
         .header("accept", "*/*")
         .header("origin", "https://www.instagram.com")
         .header("referer", "https://www.instagram.com/")
-        .header("x-fb-friendly-name", "PolarisStoriesV3ReelPageStandaloneQuery")
+        .header(
+            "x-fb-friendly-name",
+            "PolarisStoriesV3ReelPageStandaloneQuery",
+        )
         .header("x-asbd-id", "129477")
         .body(form)
         .send()
@@ -207,9 +227,12 @@ async fn stories_items(
             "graphql stories request failed (HTTP {status})"
         )));
     }
-    let body: Value = serde_json::from_str(&resp.text().await.map_err(|_| {
-        ApiError::Upstream("non-JSON graphql stories response".into())
-    })?)
+    let body: Value = serde_json::from_str(
+        &resp
+            .text()
+            .await
+            .map_err(|_| ApiError::Upstream("non-JSON graphql stories response".into()))?,
+    )
     .map_err(|_| ApiError::Upstream("non-JSON graphql stories response".into()))?;
 
     if let Some(msg) = body["errors"][0]["message"].as_str() {

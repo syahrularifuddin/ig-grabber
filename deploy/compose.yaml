@@ -1,0 +1,79 @@
+# Production stack, deployed to /opt/ig on the VPS by CI
+# (.github/workflows/deploy.yml). Secrets live in /opt/ig/.env — never in git.
+services:
+  backend:
+    image: ghcr.io/syahrularifuddin/ig-grabber/backend:latest
+    # The .env file on the host is the single source of truth for IG_SESSIONID:
+    # the backend reads it via its own dotenv loader AND rewrites it when
+    # Instagram rolls the cookie or the user renews in-app. Renewals therefore
+    # survive restarts and redeploys. The file must exist and be writable by
+    # uid 65534 (chown 65534:65534 /opt/ig/.env — see README).
+    volumes:
+      - ./.env:/app/.env
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    image: ghcr.io/syahrularifuddin/ig-grabber/frontend:latest
+    environment:
+      BACKEND_URL: http://backend:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Only public surface: 80/443. App containers have no published ports.
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN missing — set it in /opt/ig/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # TLS certs survive redeploys
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

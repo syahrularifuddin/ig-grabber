@@ -79,15 +79,17 @@ async fn update_session(
     let test = crate::config::build_client(None, Some(sid));
     if !story::probe_tray(&test).await {
         return Err(ApiError::Unauthorized(
-            "Instagram rejected this sessionid — copy a fresh one from a logged-in browser"
-                .into(),
+            "Instagram rejected this sessionid — copy a fresh one from a logged-in browser".into(),
         ));
     }
     state.set_session(sid);
     // Re-scrape the graphql token under the new session.
     *state.fb_dtsg.lock().await = None;
     tracing::info!("session renewed via API");
-    Ok(Json(SessionStatus { configured: true, valid: true }))
+    Ok(Json(SessionStatus {
+        configured: true,
+        valid: true,
+    }))
 }
 
 async fn get_stories(
@@ -99,7 +101,9 @@ async fn get_stories(
         .ok_or_else(|| ApiError::BadRequest("invalid username".into()))?;
     let session = headers.get("x-session-id").and_then(|v| v.to_str().ok());
     tracing::info!(username, "stories request");
-    Ok(Json(story::fetch_stories(&state, &username, session).await?))
+    Ok(Json(
+        story::fetch_stories(&state, &username, session).await?,
+    ))
 }
 
 #[derive(Deserialize)]

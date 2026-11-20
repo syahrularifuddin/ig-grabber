@@ -3,7 +3,9 @@ use serde_json::Value;
 use crate::error::{ApiError, ApiResult};
 use crate::models::ProfileResponse;
 
-use super::util::{as_navigation, extract_json_object, find_json_string, meta_content, value_to_string};
+use super::util::{
+    as_navigation, extract_json_object, find_json_string, meta_content, value_to_string,
+};
 
 /// Fetch a profile. Strategy order: HTML relay object (works unauthenticated,
 /// richest data) -> private JSON API -> og: meta tags.
@@ -90,7 +92,9 @@ async fn fetch_profile_api(http: &wreq::Client, username: &str) -> ApiResult<Pro
 
     let user = &v["data"]["user"];
     if user.is_null() {
-        return Err(ApiError::Upstream("unexpected Instagram profile response".into()));
+        return Err(ApiError::Upstream(
+            "unexpected Instagram profile response".into(),
+        ));
     }
 
     Ok(profile_from_value(user, username))
@@ -100,8 +104,14 @@ fn profile_from_value(user: &Value, username: &str) -> ProfileResponse {
     ProfileResponse {
         user_id: value_to_string(&user["id"]).unwrap_or_default(),
         username: user["username"].as_str().unwrap_or(username).to_string(),
-        full_name: user["full_name"].as_str().map(str::to_string).filter(|s| !s.is_empty()),
-        biography: user["biography"].as_str().map(str::to_string).filter(|s| !s.is_empty()),
+        full_name: user["full_name"]
+            .as_str()
+            .map(str::to_string)
+            .filter(|s| !s.is_empty()),
+        biography: user["biography"]
+            .as_str()
+            .map(str::to_string)
+            .filter(|s| !s.is_empty()),
         profile_pic_url: user["profile_pic_url"].as_str().map(str::to_string),
         profile_pic_url_hd: user["profile_pic_url_hd"].as_str().map(str::to_string),
         is_private: user["is_private"].as_bool().unwrap_or(false),

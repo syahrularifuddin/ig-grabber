@@ -109,7 +109,9 @@ impl AppState {
 fn extract_session_roll(headers: &HeaderMap) -> Option<String> {
     for v in headers.get_all("set-cookie") {
         let Ok(s) = v.to_str() else { continue };
-        let Some(rest) = s.strip_prefix("sessionid=") else { continue };
+        let Some(rest) = s.strip_prefix("sessionid=") else {
+            continue;
+        };
         let val = rest.split(';').next()?.trim();
         if !val.is_empty() {
             return Some(val.to_string());
@@ -188,7 +190,10 @@ pub fn build_client_with_emulation(
     // api/v1 endpoints.
     headers.insert("accept", HeaderValue::from_static("*/*"));
     headers.insert("x-asbd-id", HeaderValue::from_static("129477"));
-    headers.insert("referer", HeaderValue::from_static("https://www.instagram.com/"));
+    headers.insert(
+        "referer",
+        HeaderValue::from_static("https://www.instagram.com/"),
+    );
     headers.insert("sec-fetch-dest", HeaderValue::from_static("empty"));
     headers.insert("sec-fetch-mode", HeaderValue::from_static("cors"));
     headers.insert("sec-fetch-site", HeaderValue::from_static("same-origin"));

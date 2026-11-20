@@ -88,6 +88,36 @@ handles both:
   `sessionid` from your logged-in browser, and it's validated, swapped in live, and
   persisted — no restart, no terminal.
 
+## Deployment
+
+Push to `main` (PR merge or direct push) deploys: GitHub Actions first re-runs the CI
+checks, then builds both Docker images, pushes them to GHCR (tagged `latest` + git SHA),
+SSHes to the VPS, and runs `docker compose pull && up -d`. Failing checks block the deploy;
+back-to-back merges queue instead of racing.
+Caddy terminates TLS (auto Let's Encrypt + HTTP/3) and routes `/api/*` + `/download`
+to the backend, everything else to the frontend. Only ports 80/443 are public.
+
+One-time VPS (Ubuntu) setup:
+
+```bash
+curl -fsSL https://get.docker.com | sh          # docker + compose plugin
+sudo mkdir -p /opt/ig && cd /opt/ig
+sudo chown "$USER" .
+# GHCR login (repo is private): create a PAT with read:packages, then
+echo <PAT> | docker login ghcr.io -u syahrularifuddin --password-stdin
+cp deploy/.env.example .env                     # edit DOMAIN + IG_SESSIONID
+sudo chown 65534:65534 .env                     # backend (uid 65534) rewrites .env on session renewal
+sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw allow 443/udp && sudo ufw enable
+```
+
+Then add repo **secrets** (`Settings → Secrets → Actions`): `VPS_HOST`, `VPS_USER`,
+`VPS_SSH_KEY` (private key of a deploy-only keypair; put its public half in the VPS's
+`~/.ssh/authorized_keys`). Point the `DOMAIN` DNS A record at the VPS. That's it —
+`git push` ships.
+
+Rollback: `docker images | grep ig-grabber` to find the previous SHA tag, then
+`docker tag <old> ghcr.io/syahrularifuddin/ig-grabber/backend:latest && docker compose up -d backend`.
+
 ## API
 
 | Endpoint                          | Description                                    |
