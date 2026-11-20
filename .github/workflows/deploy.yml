@@ -1,8 +1,13 @@
-# Build images on every push to main, push to GHCR, roll out on the VPS.
+# Build images on every push to main, push to GHCR, roll out on the target VPS.
 # Required repo secrets:
-#   VPS_HOST    — VPS IP or hostname
-#   VPS_USER    — SSH user (member of the docker group)
-#   VPS_SSH_KEY — private key of a deploy-only keypair authorized on the VPS
+#   VPS_HOST         — SSH host (e.g. ssh.instabox.sh or a VPS IP)
+#   VPS_USER         — SSH user (InstaBox: the ibssh_… token; VPS: deploy user)
+#   VPS_SSH_KEY      — private deploy key (any key works for InstaBox's gateway)
+#   VPS_PORT         — SSH port (InstaBox: 2222; default 22)
+#   VPS_TARGET_PATH  — deploy dir (InstaBox: /opt/ig/deploy; default /opt/ig)
+#   VPS_MODE         — "instabox" (edge TLS, HTTP Caddyfile, compose override)
+#                      or "standard" (Caddy terminates TLS; default)
+# Unreachable VPS (paused in max-runtime cooldown) = green skip, not a red run.
 name: Deploy
 
 on:
@@ -64,23 +69,53 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install deploy key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+      - id: reach
+        name: Reachability check (SSH wakes an idle-paused machine; cooldown = skip)
+        run: |
+          if ssh -i ~/.ssh/deploy_key -p "${{ secrets.VPS_PORT || 22 }}" \
+              -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 \
+              "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" true; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VPS unreachable (max-runtime cooldown?) — rollout skipped, keeping the merge green"
+          fi
       - name: Copy deploy bundle to VPS
+        if: steps.reach.outputs.deploy == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "deploy/compose.yaml,deploy/Caddyfile"
-          target: /opt/ig
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: "deploy/compose.yaml,deploy/Caddyfile,deploy/Caddyfile.http,deploy/compose.instabox.yaml"
+          target: ${{ secrets.VPS_TARGET_PATH || '/opt/ig' }}
           strip_components: 1
       - name: Roll out
+        if: steps.reach.outputs.deploy == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd /opt/ig
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker image prune -f
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script_stop: true
+          envs: VPS_MODE,DEPLOY_DIR
+        env:
+          VPS_MODE: ${{ secrets.VPS_MODE || 'standard' }}
+          DEPLOY_DIR: ${{ secrets.VPS_TARGET_PATH || '/opt/ig' }}
+        script: |
+          cd "$DEPLOY_DIR"
+          COMPOSE="docker compose"
+          if [ "$VPS_MODE" = "instabox" ]; then
+            cp Caddyfile.http Caddyfile
+            COMPOSE="docker compose -f compose.yaml -f compose.instabox.yaml"
+          fi
+          $COMPOSE pull || true  # GHCR images may be private; local builds still serve
+          $COMPOSE up -d --remove-orphans
+          docker image prune -f

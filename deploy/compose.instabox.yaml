@@ -1,0 +1,8 @@
+# InstaBox/sandbox mode override: the platform only publishes ports >=1024 and
+# terminates TLS at its edge, so Caddy takes host 8080 -> container 80.
+# Run:  docker compose -f compose.yaml -f compose.instabox.yaml up -d
+# Then publish machine port 8080 in the InstaBox panel.
+services:
+  caddy:
+    ports: !override
+      - "8080:80"

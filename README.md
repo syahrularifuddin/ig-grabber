@@ -112,8 +112,11 @@ sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw allow 443/udp &&
 
 Then add repo **secrets** (`Settings → Secrets → Actions`): `VPS_HOST`, `VPS_USER`,
 `VPS_SSH_KEY` (private key of a deploy-only keypair; put its public half in the VPS's
-`~/.ssh/authorized_keys`). Point the `DOMAIN` DNS A record at the VPS. That's it —
-`git push` ships.
+`~/.ssh/authorized_keys`). Optional: `VPS_PORT` (default 22), `VPS_MODE=instabox` +
+`VPS_TARGET_PATH=/opt/ig/deploy` for InstaBox-style sandboxes (edge TLS, HTTP-only
+Caddyfile, ports ≥1024). If the VPS is unreachable (paused sandbox), the rollout is
+skipped and the merge stays green. Point the `DOMAIN` DNS A record at the VPS. That's
+it — `git push` ships.
 
 Rollback: `docker images | grep ig-grabber` to find the previous SHA tag, then
 `docker tag <old> ghcr.io/syahrularifuddin/ig-grabber/backend:latest && docker compose up -d backend`.
