@@ -1,4 +1,6 @@
-# Build images on every push to main, push to GHCR, roll out on the target VPS.
+# Build images on push to main — only for modules that changed — push them to
+# GHCR and roll out on the target VPS. A deploy/-only change (Caddyfile,
+# compose) still rolls out, just without rebuilding images.
 # Required repo secrets:
 #   VPS_HOST         — SSH host (e.g. ssh.instabox.sh or a VPS IP)
 #   VPS_USER         — SSH user (InstaBox: the ibssh_… token; VPS: deploy user)
@@ -26,12 +28,41 @@ concurrency:
   group: deploy-production
 
 jobs:
-  # Gate: merge-to-main deploys only green code. Reuses the CI workflow.
+  # Which modules did this push touch? Drives CI, image builds and rollout.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+            infra:
+              - 'deploy/**'
+              - '.github/workflows/deploy.yml'
+
+  # Gate: merge-to-main deploys only green code. Reuses the CI workflow,
+  # forwarding the change detection so untouched modules skip CI too.
   checks:
+    needs: changes
     uses: ./.github/workflows/ci.yml
+    with:
+      backend_changed: ${{ needs.changes.outputs.backend }}
+      frontend_changed: ${{ needs.changes.outputs.frontend }}
 
   images:
-    needs: checks
+    needs: [checks, changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +75,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build & push backend
+        if: needs.changes.outputs.backend == 'true'
         uses: docker/build-push-action@v6
         with:
           context: backend
@@ -54,6 +86,7 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
       - name: Build & push frontend
+        if: needs.changes.outputs.frontend == 'true'
         uses: docker/build-push-action@v6
         with:
           context: frontend
@@ -65,7 +98,20 @@ jobs:
           cache-to: type=gha,scope=frontend,mode=max
 
   deploy:
-    needs: images
+    # Explicit condition instead of the default success() gate: `images` being
+    # skipped (deploy/-only change) must still allow a rollout, but a failed or
+    # skipped CI gate must not. Unchanged modules keep their :latest tags, so
+    # `compose up -d` leaves their containers untouched.
+    needs: [checks, images, changes]
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.checks.result == 'success' &&
+        (needs.images.result == 'success' || needs.images.result == 'skipped') &&
+        (needs.changes.outputs.backend == 'true' ||
+         needs.changes.outputs.frontend == 'true' ||
+         needs.changes.outputs.infra == 'true')
+      }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

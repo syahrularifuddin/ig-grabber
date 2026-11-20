@@ -1,13 +1,61 @@
 name: CI
 
 # Runs on PRs, and is called by deploy.yml as a pre-deploy gate on main
-# (reusable workflow).
+# (reusable workflow). Each job runs only when its module changed: PRs detect
+# changes here, pushes get the caller's detection passed in via the *_changed
+# inputs (defaults 'true', so a bare call still checks everything).
 on:
   pull_request:
   workflow_call:
+    inputs:
+      backend_changed:
+        description: 'backend/ had changes in this push'
+        type: string
+        default: 'true'
+      frontend_changed:
+        description: 'frontend/ had changes in this push'
+        type: string
+        default: 'true'
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.set.outputs.backend }}
+      frontend: ${{ steps.set.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect changed paths (PRs)
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+      - id: set
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BACKEND: ${{ steps.filter.outputs.backend }}
+          PR_FRONTEND: ${{ steps.filter.outputs.frontend }}
+          CALLER_BACKEND: ${{ inputs.backend_changed }}
+          CALLER_FRONTEND: ${{ inputs.frontend_changed }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            echo "backend=$PR_BACKEND" >> "$GITHUB_OUTPUT"
+            echo "frontend=$PR_FRONTEND" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=$CALLER_BACKEND" >> "$GITHUB_OUTPUT"
+            echo "frontend=$CALLER_FRONTEND" >> "$GITHUB_OUTPUT"
+          fi
+
   backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,6 +85,8 @@ jobs:
       - run: cargo test
 
   frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
