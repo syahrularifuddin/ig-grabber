@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- IG Grabber app icon: squircle, rose→blue gradient, download glyph -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fb7185"/>
+      <stop offset="45%" stop-color="#e11d48"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity=".25"/>
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="118" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="118" fill="url(#sheen)"/>
+  <g stroke="#ffffff" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M256 112v184"/>
+    <path d="M170 218l86 86 86-86"/>
+    <path d="M150 380h212"/>
+  </g>
+</svg>

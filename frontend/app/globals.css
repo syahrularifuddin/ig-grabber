@@ -656,6 +656,18 @@ code {
     padding: 16px;
   }
 
+  /* Tab buttons form an even 2×2 block instead of a ragged wrapped row */
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tab {
+    justify-content: center;
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+
   .input-row {
     flex-direction: column;
   }
