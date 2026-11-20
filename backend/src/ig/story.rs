@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use crate::config::{build_client, AppState};
+use crate::config::{build_client, AppState, SessionState};
 use crate::error::{ApiError, ApiResult};
 use crate::models::{SessionStatus, StoryItem, StoryResponse};
 
@@ -48,10 +48,26 @@ pub async fn fetch_stories(
     username: &str,
     session_override: Option<&str>,
 ) -> ApiResult<StoryResponse> {
-    let prof = profile::fetch_profile(&state.http, username).await?;
-
     let s = state.session.read().expect("session lock poisoned").clone();
     let has_session = session_override.is_some() || s.session_id.is_some();
+
+    // Resolve the profile over the session when one exists — the app search
+    // API is the only username -> id path (web_profile_info is retired,
+    // profile pages don't embed the user object, and anonymous requests are
+    // login-walled on datacenter IPs anyway).
+    let prof = if has_session {
+        let app = match session_override {
+            Some(sid) => SessionState::app_client(sid),
+            None => s.app_http.clone(),
+        };
+        match profile::fetch_profile_search(&app, username).await {
+            Ok(p) => p,
+            Err(_) => profile::fetch_profile(&s.authed_http, username).await?,
+        }
+    } else {
+        profile::fetch_profile(&state.http, username).await?
+    };
+
     if !has_session {
         return Ok(StoryResponse {
             username: prof.username,

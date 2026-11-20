@@ -43,7 +43,17 @@ async fn get_profile(
     let username = sanitize_username(&username)
         .ok_or_else(|| ApiError::BadRequest("invalid username".into()))?;
     tracing::info!(username, "profile request");
-    Ok(Json(profile::fetch_profile(&state.http, &username).await?))
+    // Prefer the session-backed search when configured — the profile page
+    // no longer embeds the user object and web_profile_info is retired.
+    let s = state.session.read().expect("session lock poisoned").clone();
+    let prof = match s.session_id.as_deref() {
+        Some(_) => match profile::fetch_profile_search(&s.app_http, &username).await {
+            Ok(p) => p,
+            Err(_) => profile::fetch_profile(&s.authed_http, &username).await?,
+        },
+        None => profile::fetch_profile(&state.http, &username).await?,
+    };
+    Ok(Json(prof))
 }
 
 async fn get_post(

@@ -19,6 +19,62 @@ pub async fn fetch_profile(http: &wreq::Client, username: &str) -> ApiResult<Pro
     fetch_profile_og(http, username).await
 }
 
+/// Resolve a profile through the app search API (`api/v1/users/search`).
+/// The profile page no longer embeds the target user object and
+/// `web_profile_info` is retired (404s), so this session-backed search is
+/// the only reliable username -> user id path. `http` must be the
+/// app-emulating session client (`SessionState::app_http`).
+pub async fn fetch_profile_search(
+    http: &wreq::Client,
+    username: &str,
+) -> ApiResult<ProfileResponse> {
+    let url = format!("https://i.instagram.com/api/v1/users/search/?q={username}");
+    let resp = http.get(&url).send().await?;
+    let status = resp.status().as_u16();
+    if status == 401 || status == 403 {
+        return Err(ApiError::Unauthorized(
+            "Instagram rejected the session cookie — it may be expired or invalid".into(),
+        ));
+    }
+    let v: Value = serde_json::from_str(
+        &resp
+            .text()
+            .await
+            .map_err(|_| ApiError::Upstream("non-JSON search response".into()))?,
+    )
+    .map_err(|_| ApiError::Upstream("non-JSON search response".into()))?;
+
+    // The search is fuzzy — pick the entry whose username matches exactly.
+    let want = username.to_ascii_lowercase();
+    let user = v["users"]
+        .as_array()
+        .and_then(|arr| {
+            arr.iter().find(|u| {
+                u["username"]
+                    .as_str()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(&want))
+            })
+        })
+        .ok_or_else(|| ApiError::NotFound(format!("user '{username}' not found")))?;
+
+    Ok(ProfileResponse {
+        user_id: value_to_string(&user["pk"]).unwrap_or_default(),
+        username: user["username"].as_str().unwrap_or(username).to_string(),
+        full_name: user["full_name"]
+            .as_str()
+            .map(str::to_string)
+            .filter(|s| !s.is_empty()),
+        biography: None,
+        profile_pic_url: user["profile_pic_url"].as_str().map(str::to_string),
+        profile_pic_url_hd: None,
+        is_private: user["is_private"].as_bool().unwrap_or(false),
+        is_verified: user["is_verified"].as_bool().unwrap_or(false),
+        followers: None,
+        following: None,
+        posts: None,
+    })
+}
+
 /// Parse the `xig_user_by_username` relay object embedded in the profile page.
 async fn fetch_profile_relay(http: &wreq::Client, username: &str) -> ApiResult<ProfileResponse> {
     let url = format!("https://www.instagram.com/{username}/");

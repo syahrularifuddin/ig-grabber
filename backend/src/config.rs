@@ -41,6 +41,11 @@ impl SessionState {
             session_id,
         }
     }
+
+    /// App-emulating client for an ad-hoc sessionid (per-request override).
+    pub fn app_client(session_id: &str) -> Client {
+        build_client_with_emulation(Emulation::OkHttp3_13, Some(APP_UA), Some(session_id))
+    }
 }
 
 #[derive(Clone)]
