@@ -18,6 +18,9 @@ COPY --from=build /src/next.config.ts ./next.config.ts
 COPY --from=build /src/tsconfig.json ./tsconfig.json
 COPY --from=build /src/node_modules ./node_modules
 COPY --from=build /src/.next ./.next
+# public/ is served from disk by `next start` — without this the favicon,
+# icons and manifest 404 in production (they only exist in the build stage).
+COPY --from=build /src/public ./public
 EXPOSE 3000
 USER node
 CMD ["node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
