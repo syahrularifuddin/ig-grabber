@@ -1,5 +1,11 @@
 # IG Grabber
 
+[![CI & Deploy](https://github.com/syahrularifuddin/ig-grabber/actions/workflows/deploy.yml/badge.svg)](https://github.com/syahrularifuddin/ig-grabber/actions/workflows/deploy.yml)
+[![Rust](https://img.shields.io/badge/Rust-1.98%2B-DEA584?logo=rust&logoColor=black)](https://www.rust-lang.org)
+[![Node.js](https://img.shields.io/badge/Node.js-18.18%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![Next.js](https://img.shields.io/badge/Next.js-TypeScript-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?logo=docker&logoColor=white)](https://ghcr.io/syahrularifuddin/ig-grabber)
+
 A full-stack web app to download publicly available Instagram media:
 
 - **Reels & videos**
