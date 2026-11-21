@@ -1,17 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Playfair_Display, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
-});
-
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  style: ["italic"],
-  weight: ["700"],
-  variable: "--font-display",
 });
 
 const mono = JetBrains_Mono({
@@ -39,13 +32,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#e11d48",
+  themeColor: "#f7f5f1",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${playfair.variable} ${mono.variable}`}>{children}</body>
+      <body className={`${inter.variable} ${mono.variable}`}>{children}</body>
     </html>
   );
 }
