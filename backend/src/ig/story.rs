@@ -51,10 +51,10 @@ pub async fn fetch_stories(
     let s = state.session.read().expect("session lock poisoned").clone();
     let has_session = session_override.is_some() || s.session_id.is_some();
 
-    // Resolve the profile over the session when one exists — the app search
-    // API is the only username -> id path (web_profile_info is retired,
-    // profile pages don't embed the user object, and anonymous requests are
-    // login-walled on datacenter IPs anyway).
+    // Resolve the profile over the session when one exists — app search when
+    // Instagram honors it, otherwise the profile page's profile-root props id
+    // (web_profile_info is retired, the page embeds no user object anymore,
+    // and anonymous requests are login-walled on datacenter IPs anyway).
     let prof = if has_session {
         let app = match session_override {
             Some(sid) => SessionState::app_client(sid),
@@ -80,7 +80,7 @@ pub async fn fetch_stories(
     }
     if prof.user_id.is_empty() {
         return Err(ApiError::Upstream(
-            "could not resolve the user id for stories".into(),
+            "could not resolve the user id for stories — Instagram did not serve profile data, try again shortly".into(),
         ));
     }
 
@@ -210,7 +210,7 @@ async fn stories_items(
          __comet_req=7&lsd=6b2800R9u4biJOYjcdXFEI&__spin_r=1011444902&__spin_b=trunk&\
          __spin_t=1708019550&fb_api_caller_class=RelayModern&\
          fb_api_req_friendly_name=PolarisStoriesV3ReelPageStandaloneQuery&\
-         server_timestamps=true&variables={}&doc_id=29184890191114309&fb_dtsg={}",
+         server_timestamps=true&variables={}&doc_id=39989351314045574&fb_dtsg={}",
         form_urlencode(&variables),
         form_urlencode(fb_dtsg),
     );
