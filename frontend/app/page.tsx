@@ -290,29 +290,42 @@ export default function Home() {
                 </div>
               </div>
               <div className="media-actions">
-                {profile.profile_pic_url_hd && (
+                {profile.profile_pic_url_hd ? (
+                  <>
+                    <a
+                      className="btn primary"
+                      href={downloadUrl(
+                        profile.profile_pic_url_hd,
+                        `${sanitizeName(profile.username)}_profile_pic_hd.jpg`,
+                      )}
+                    >
+                      <IconDownload />
+                      Download picture (HD)
+                    </a>
+                    {profile.profile_pic_url && (
+                      <a
+                        className="btn ghost"
+                        href={downloadUrl(
+                          profile.profile_pic_url,
+                          `${sanitizeName(profile.username)}_profile_pic.jpg`,
+                        )}
+                      >
+                        Standard quality
+                      </a>
+                    )}
+                  </>
+                ) : profile.profile_pic_url ? (
                   <a
                     className="btn primary"
-                    href={downloadUrl(
-                      profile.profile_pic_url_hd,
-                      `${sanitizeName(profile.username)}_profile_pic_hd.jpg`,
-                    )}
-                  >
-                    <IconDownload />
-                    Download picture (HD)
-                  </a>
-                )}
-                {profile.profile_pic_url && (
-                  <a
-                    className="btn ghost"
                     href={downloadUrl(
                       profile.profile_pic_url,
                       `${sanitizeName(profile.username)}_profile_pic.jpg`,
                     )}
                   >
-                    Standard quality
+                    <IconDownload />
+                    Download picture
                   </a>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -324,9 +337,11 @@ export default function Home() {
           {!story.auth_configured ? (
             <div className="notice">
               <strong>Stories need a login session.</strong> Stories are only visible to
-              logged-in accounts, so the backend needs your <code>sessionid</code> cookie:
+              logged-in accounts, so the backend needs a <code>sessionid</code> cookie from
+              a <strong>throwaway account</strong> — automated traffic can get an account
+              suspended, so never use your personal one:
               <ol>
-                <li>Log in to instagram.com in your browser</li>
+                <li>Log in to instagram.com with a disposable account (no likes or follows)</li>
                 <li>
                   Copy the <code>sessionid</code> cookie value (DevTools → Application → Cookies)
                 </li>
@@ -417,7 +432,8 @@ function SessionPanel({
       <label>
         Paste the current <code>sessionid</code> cookie value — DevTools (F12) →
         Application → Cookies → instagram.com → <code>sessionid</code>. It replaces the
-        old one in place; no restart needed.
+        old one in place; no restart needed. Use a <strong>throwaway account</strong>:
+        automated traffic can get an account suspended.
       </label>
       <div className="input-row">
         <input

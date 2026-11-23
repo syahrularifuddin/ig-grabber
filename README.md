@@ -61,24 +61,28 @@ session status (`/api/session`).
 The backend reads a local `backend/.env` file (see `.env.example`) — set variables once and
 `cargo run` just works. Real environment variables take precedence.
 
-### Posts, reels & stories need a session
+### Posts, reels & stories need a session (use a burner account)
 
 Instagram blocks anonymous extraction of posts and stories (rate-limit walls and
 `login_required`); only profile data and profile pictures work without login. To enable
-everything else with **your own login** (personal use):
+everything else, use a **throwaway account — never your personal one**. Automated traffic
+can get an account suspended, and a burner contains that blast radius.
 
-1. Log in to instagram.com in your browser — the app never sees your password.
+1. Create a disposable Instagram account and log in with it in your browser. Skip the
+   profile setup, and never use it for likes, follows or comments.
 2. DevTools (F12) → Application → Cookies → `https://www.instagram.com` → copy the
    `sessionid` value.
-3. Put it in `backend/.env`:
+3. Click the session chip in the UI and paste it (validated + saved live) — or put it in
+   `backend/.env`:
    ```
-   IG_SESSIONID=your_value_here
+   IG_SESSIONID=your_burner_value_here
    ```
-4. Restart the backend (`cargo run`). The header chip in the UI should turn green —
-   "session active".
+4. The chip should turn green — "session active". If it goes red, the account/cookie is
+   dead; make another burner, don't retry the old one in a loop.
 
-The cookie is a session token, not credentials: it stays in your local `.env`, is sent only
-to Instagram, and can be revoked anytime by logging out or changing your password.
+The backend spaces out authenticated calls (~1.2s apart) and never follows, likes or
+posts — but treat the burner as disposable either way. The cookie is a session token, not
+credentials: it stays in your local `.env` and is sent only to Instagram.
 A `sessionid` can also be supplied per-request via the `x-session-id` header, and private
 accounts require the configured session to follow them.
 

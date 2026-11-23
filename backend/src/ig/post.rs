@@ -22,6 +22,9 @@ pub async fn fetch_post(state: &AppState, shortcode: &str) -> ApiResult<PostResp
     }
 
     let s = state.session.read().expect("session lock poisoned").clone();
+    if s.session_id.is_some() {
+        state.pace_authed().await;
+    }
     // Embed pages serve full media data to logged-in sessions (feed posts
     // included) — the most reliable post path when a session exists.
     if s.session_id.is_some() {
