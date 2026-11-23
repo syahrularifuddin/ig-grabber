@@ -100,36 +100,37 @@ handles both:
 
 ## Deployment
 
-Push to `main` (PR merge or direct push) deploys: GitHub Actions first re-runs the CI
-checks, then builds both Docker images, pushes them to GHCR (tagged `latest` + git SHA),
-SSHes to the VPS, and runs `docker compose pull && up -d`. Failing checks block the deploy;
-back-to-back merges queue instead of racing.
-Caddy terminates TLS (auto Let's Encrypt + HTTP/3) and routes `/api/*` + `/download`
-to the backend, everything else to the frontend. Only ports 80/443 are public.
+Push to `main` (PR merge or direct push) deploys. GitHub Actions runs the CI checks
+first, builds the backend and frontend images, pushes them to GHCR (tagged `latest` +
+git SHA), then SSHes to the VPS and runs `docker compose pull && up -d`. Failing checks
+block the deploy; back-to-back merges queue instead of racing.
 
-One-time VPS (Ubuntu) setup:
+The app has **no public ports** of its own. It joins the shared `edge` Docker network of
+the VPS that already serves [halosyahrul.com](https://halosyahrul.com), whose Caddy
+terminates TLS and routes **https://ig.halosyahrul.com**:
+
+- `/api/*` and `/download` → `ig-api:8080`
+- everything else → `ig-web:3000`
+
+One-time VPS setup (the halosyahrul.com stack must already be running there):
 
 ```bash
-curl -fsSL https://get.docker.com | sh          # docker + compose plugin
-sudo mkdir -p /opt/ig && cd /opt/ig
-sudo chown "$USER" .
-# GHCR login (repo is private): create a PAT with read:packages, then
-echo <PAT> | docker login ghcr.io -u syahrularifuddin --password-stdin
-cp deploy/.env.example .env                     # edit DOMAIN + IG_SESSIONID
-sudo chown 65534:65534 .env                     # backend (uid 65534) rewrites .env on session renewal
-sudo ufw allow OpenSSH && sudo ufw allow 80,443/tcp && sudo ufw allow 443/udp && sudo ufw enable
+sudo mkdir -p /opt/ig && sudo chown "$USER" /opt/ig
+cp deploy/.env.example /opt/ig/.env
+sudo chown 65534:65534 /opt/ig/.env   # backend (uid 65534) rewrites it on session renewal
+# deploy-only SSH key: put its public half in ~/.ssh/authorized_keys
 ```
 
-Then add repo **secrets** (`Settings → Secrets → Actions`): `VPS_HOST`, `VPS_USER`,
-`VPS_SSH_KEY` (private key of a deploy-only keypair; put its public half in the VPS's
-`~/.ssh/authorized_keys`). Optional: `VPS_PORT` (default 22), `VPS_MODE=instabox` +
-`VPS_TARGET_PATH=/opt/ig/deploy` for InstaBox-style sandboxes (edge TLS, HTTP-only
-Caddyfile, ports ≥1024). If the VPS is unreachable (paused sandbox), the rollout is
-skipped and the merge stays green. Point the `DOMAIN` DNS A record at the VPS. That's
-it — `git push` ships.
+Add repo **secrets** (`Settings → Secrets → Actions`): `VPS_HOST`, `VPS_USER`,
+`VPS_SSH_KEY`. Optional: `VPS_PORT` (default 22), `VPS_TARGET_PATH` (default `/opt/ig`).
+
+Add the DNS record `ig.halosyahrul.com A <VPS_IP>` (Caddy gets the Let's Encrypt cert
+automatically), and the `ig.{$DOMAIN}` block to halosyahrul.com's `deploy/Caddyfile`
+(that repo owns the edge) — that block is what points the subdomain at
+`ig-api`/`ig-web`. Then `git push` ships.
 
 Rollback: `docker images | grep ig-grabber` to find the previous SHA tag, then
-`docker tag <old> ghcr.io/syahrularifuddin/ig-grabber/backend:latest && docker compose up -d backend`.
+`docker tag <old> ghcr.io/syahrularifuddin/ig-grabber/backend:latest && docker compose up -d ig-api`.
 
 ## API
 
