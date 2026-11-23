@@ -48,6 +48,10 @@ impl SessionState {
     }
 }
 
+/// Minimum spacing between session-authenticated Instagram calls. Accounts get
+/// flagged for bursty traffic; one call per ~1.2s keeps it human-shaped.
+const AUTH_PACE: Duration = Duration::from_millis(1200);
+
 #[derive(Clone)]
 pub struct AppState {
     /// Anonymous client (browser-emulating).
@@ -57,6 +61,8 @@ pub struct AppState {
     pub session: Arc<RwLock<SessionState>>,
     /// Scraped `fb_dtsg` token for the graphql API, cached across requests.
     pub fb_dtsg: Arc<tokio::sync::Mutex<Option<String>>>,
+    /// Timestamp of the last session-authenticated call (see `pace_authed`).
+    last_authed: Arc<tokio::sync::Mutex<Option<std::time::Instant>>>,
     pub port: u16,
 }
 
@@ -78,8 +84,22 @@ impl AppState {
             dl_http: build_client(None, None),
             session: Arc::new(RwLock::new(SessionState::new(session_id))),
             fb_dtsg: Arc::new(tokio::sync::Mutex::new(None)),
+            last_authed: Arc::new(tokio::sync::Mutex::new(None)),
             port,
         }
+    }
+
+    /// Space out session-authenticated calls so a burst of requests never
+    /// reaches Instagram back-to-back. Callers serialize through the lock.
+    pub async fn pace_authed(&self) {
+        let mut last = self.last_authed.lock().await;
+        if let Some(t) = *last {
+            let elapsed = t.elapsed();
+            if elapsed < AUTH_PACE {
+                tokio::time::sleep(AUTH_PACE - elapsed).await;
+            }
+        }
+        *last = Some(std::time::Instant::now());
     }
 
     /// Swap in an already-validated session and persist it to `.env`.

@@ -47,10 +47,21 @@ async fn get_profile(
     // no longer embeds the user object and web_profile_info is retired.
     let s = state.session.read().expect("session lock poisoned").clone();
     let prof = match s.session_id.as_deref() {
-        Some(_) => match profile::fetch_profile_search(&s.app_http, &username).await {
-            Ok(p) => p,
-            Err(_) => profile::fetch_profile(&s.authed_http, &username).await?,
-        },
+        Some(_) => {
+            state.pace_authed().await;
+            let mut prof = match profile::fetch_profile_search(&s.app_http, &username).await {
+                Ok(p) => p,
+                Err(_) => profile::fetch_profile(&s.authed_http, &username).await?,
+            };
+            // Search results never carry the HD avatar — ask the app API for it.
+            if prof.profile_pic_url_hd.is_none() && !prof.user_id.is_empty() {
+                state.pace_authed().await;
+                if let Some(hd) = profile::fetch_profile_hd(&s.app_http, &prof.user_id).await {
+                    prof.profile_pic_url_hd = Some(hd);
+                }
+            }
+            prof
+        }
         None => profile::fetch_profile(&state.http, &username).await?,
     };
     Ok(Json(prof))
@@ -68,6 +79,15 @@ async fn get_post(
 }
 
 async fn get_session(State(state): State<AppState>) -> ApiResult<Json<SessionStatus>> {
+    let configured = state
+        .session
+        .read()
+        .expect("session lock poisoned")
+        .session_id
+        .is_some();
+    if configured {
+        state.pace_authed().await;
+    }
     Ok(Json(story::check_session(&state).await))
 }
 
@@ -110,6 +130,15 @@ async fn get_stories(
     let username = sanitize_username(&username)
         .ok_or_else(|| ApiError::BadRequest("invalid username".into()))?;
     let session = headers.get("x-session-id").and_then(|v| v.to_str().ok());
+    let store_has_session = state
+        .session
+        .read()
+        .expect("session lock poisoned")
+        .session_id
+        .is_some();
+    if session.is_some() || store_has_session {
+        state.pace_authed().await;
+    }
     tracing::info!(username, "stories request");
     Ok(Json(
         story::fetch_stories(&state, &username, session).await?,
