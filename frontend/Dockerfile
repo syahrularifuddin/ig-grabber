@@ -5,14 +5,14 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-ARG BACKEND_URL=http://localhost:8080
+ARG BACKEND_URL=http://ig-api:8080
 ENV NEXT_TELEMETRY_DISABLED=1 BACKEND_URL=$BACKEND_URL
 RUN npm run build
 
 # ---- runtime stage ----
 FROM node:20-slim
 WORKDIR /src
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 BACKEND_URL=http://backend:8080
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 BACKEND_URL=http://ig-api:8080
 COPY --from=build /src/package.json ./package.json
 COPY --from=build /src/next.config.ts ./next.config.ts
 COPY --from=build /src/tsconfig.json ./tsconfig.json
