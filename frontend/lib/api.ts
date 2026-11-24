@@ -52,6 +52,29 @@ export interface StoryResponse {
   items: StoryItem[];
 }
 
+export interface HighlightSummary {
+  /** Numeric highlight id (without the `highlight:` prefix). */
+  id: string;
+  title: string;
+  cover_url?: string;
+  item_count?: number;
+}
+
+export interface HighlightsResponse {
+  username: string;
+  /** Whether the backend has a sessionid cookie configured (required for highlights). */
+  auth_configured: boolean;
+  note?: string;
+  highlights: HighlightSummary[];
+}
+
+export interface HighlightResponse {
+  id: string;
+  title?: string;
+  username?: string;
+  items: StoryItem[];
+}
+
 export interface SessionStatus {
   /** Whether IG_SESSIONID is configured in the backend. */
   configured: boolean;
@@ -78,7 +101,8 @@ export type ParsedInput =
   | { type: "reels"; shortcode: string }
   | { type: "photos"; shortcode: string }
   | { type: "profile"; username: string }
-  | { type: "story"; username: string };
+  | { type: "story"; username: string }
+  | { type: "highlight"; id: string };
 
 export const USERNAME_RE = /^[A-Za-z0-9._]{1,30}$/;
 export const SHORTCODE_RE = /^[A-Za-z0-9_-]{5,32}$/;
@@ -96,6 +120,14 @@ export function parseUrl(raw: string): ParsedInput | null {
     }
     if (["reel", "reels"].includes(parts[0]) && parts[1] && SHORTCODE_RE.test(parts[1])) {
       return { type: "reels", shortcode: parts[1] };
+    }
+    if (
+      parts[0] === "stories" &&
+      parts[1] === "highlights" &&
+      parts[2] &&
+      /^\d{5,40}$/.test(parts[2])
+    ) {
+      return { type: "highlight", id: parts[2] };
     }
     if (parts[0] === "stories" && parts[1] && USERNAME_RE.test(parts[1])) {
       return { type: "story", username: parts[1] };

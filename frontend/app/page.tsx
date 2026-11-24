@@ -11,20 +11,25 @@ import {
   updateSession,
   SHORTCODE_RE,
   USERNAME_RE,
+  type HighlightResponse,
+  type HighlightSummary,
+  type HighlightsResponse,
   type MediaItem,
   type PostResponse,
   type ProfileResponse,
   type SessionStatus,
+  type StoryItem,
   type StoryResponse,
 } from "@/lib/api";
 
-type Tab = "reels" | "photos" | "profile" | "story";
+type Tab = "reels" | "photos" | "profile" | "story" | "highlights";
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: "reels", label: "Reels", icon: <IconClapperboard /> },
   { id: "photos", label: "Photos", icon: <IconImage /> },
   { id: "profile", label: "Profile Picture", icon: <IconUser /> },
   { id: "story", label: "Story", icon: <IconClock /> },
+  { id: "highlights", label: "Highlights", icon: <IconBookmark /> },
 ];
 
 const PLACEHOLDERS: Record<Tab, string> = {
@@ -32,6 +37,7 @@ const PLACEHOLDERS: Record<Tab, string> = {
   photos: "Paste a photo URL (instagram.com/p/…) or shortcode",
   profile: "Enter a username or profile URL (e.g. nasa)",
   story: "Enter a username to fetch their active stories",
+  highlights: "Enter a username or paste a highlight URL (instagram.com/stories/highlights/…)",
 };
 
 const POST_HINT: Record<"reels" | "photos", string> = {
@@ -53,6 +59,8 @@ export default function Home() {
   const [post, setPost] = useState<PostResponse | null>(null);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [story, setStory] = useState<StoryResponse | null>(null);
+  const [highlights, setHighlights] = useState<HighlightsResponse | null>(null);
+  const [highlight, setHighlight] = useState<HighlightResponse | null>(null);
   const [session, setSession] = useState<SessionStatus | null>(null);
   const [sessionPanel, setSessionPanel] = useState(false);
   const [sidInput, setSidInput] = useState("");
@@ -89,7 +97,8 @@ export default function Home() {
 
     const parsed = parseUrl(raw);
     // The URL wins over the active tab so pasting any link just works.
-    const target: Tab = parsed?.type ?? tab;
+    const target: Tab =
+      parsed?.type === "highlight" ? "highlights" : (parsed?.type ?? tab);
 
     setError(null);
     setLoading(true);
@@ -107,12 +116,43 @@ export default function Home() {
           parsed?.type === "profile" ? parsed.username : bareUsername(raw);
         if (!username) throw new Error("Enter a profile username or URL.");
         setProfile(await apiGet<ProfileResponse>(`/api/profile/${encodeURIComponent(username)}`));
+      } else if (target === "highlights") {
+        if (parsed?.type === "highlight") {
+          setHighlights(null);
+          setHighlight(
+            await apiGet<HighlightResponse>(`/api/highlights/id/${parsed.id}`),
+          );
+        } else {
+          const username =
+            parsed?.type === "profile" ? parsed.username : bareUsername(raw);
+          if (!username) throw new Error("Enter a username to fetch their highlights.");
+          setHighlight(null);
+          setHighlights(
+            await apiGet<HighlightsResponse>(
+              `/api/highlights/${encodeURIComponent(username)}`,
+            ),
+          );
+        }
       } else {
         const username =
           parsed?.type === "story" ? parsed.username : bareUsername(raw);
         if (!username) throw new Error("Enter a username whose story you want to fetch.");
         setStory(await apiGet<StoryResponse>(`/api/stories/${encodeURIComponent(username)}`));
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openHighlight(h: HighlightSummary) {
+    setError(null);
+    setLoading(true);
+    try {
+      setHighlight(
+        await apiGet<HighlightResponse>(`/api/highlights/id/${h.id}`),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -163,7 +203,8 @@ export default function Home() {
           Grab any <em>Instagram</em> media.
         </h1>
         <p className="tagline">
-          Reels, photos, covers, profile pictures &amp; stories — one paste, one click.
+          Reels, photos, covers, profile pictures, stories &amp; highlights — one paste,
+          one click.
         </p>
       </header>
 
@@ -360,32 +401,96 @@ export default function Home() {
               <h3 className="result-title">{story.items.length} active story item(s)</h3>
               <div className="media-grid">
                 {story.items.map((item, i) => (
-                  <div className="media-card" key={item.id || i}>
-                    <div className="media-preview">
-                      <img src={item.thumbnail_url ?? item.url} alt="" loading="lazy" />
-                      <span className={`badge ${item.kind}`}>{item.kind.toUpperCase()}</span>
-                      {item.expires_at && (
-                        <span className="expires">expires in {hoursLeft(item.expires_at)}</span>
-                      )}
-                    </div>
-                    <div className="media-actions">
-                      <a
-                        className="btn primary"
-                        href={downloadUrl(
-                          item.url,
-                          `${sanitizeName(story.username)}_story_${i + 1}${item.kind === "video" ? ".mp4" : ".jpg"}`,
-                        )}
-                      >
-                        <IconDownload />
-                        Download
-                      </a>
-                      <CopyLink url={item.url} />
-                    </div>
-                  </div>
+                  <StoryMediaCard
+                    key={item.id || i}
+                    item={item}
+                    baseName={`${sanitizeName(story.username)}_story`}
+                    index={i}
+                  />
                 ))}
               </div>
             </>
           )}
+        </section>
+      )}
+
+      {tab === "highlights" && (highlight || highlights) && (
+        <section className="result">
+          {highlight ? (
+            <>
+              <div className="highlight-head">
+                {highlights && (
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => setHighlight(null)}
+                  >
+                    <IconArrowLeft />
+                    All highlights
+                  </button>
+                )}
+                <h3 className="result-title">
+                  {highlight.title || "Highlight"}
+                  {highlight.username && ` · @${highlight.username}`}
+                </h3>
+              </div>
+              {highlight.items.length === 0 ? (
+                <div className="empty">This highlight has no media items.</div>
+              ) : (
+                <div className="media-grid">
+                  {highlight.items.map((item, i) => (
+                    <StoryMediaCard
+                      key={item.id || i}
+                      item={item}
+                      baseName={`${sanitizeName(highlight.username ?? "highlight")}_highlight_${sanitizeName(highlight.title || highlight.id)}`}
+                      index={i}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : highlights && !highlights.auth_configured ? (
+            <div className="notice">
+              <strong>Highlights need a login session.</strong> Highlights are fetched
+              through Instagram&apos;s private API, so the backend needs a{" "}
+              <code>sessionid</code> cookie from a <strong>throwaway account</strong>:
+              log in to instagram.com, copy the <code>sessionid</code> cookie (DevTools →
+              Application → Cookies), then click the session chip at the top and paste it
+              — or put <code>IG_SESSIONID</code> in <code>backend/.env</code>.
+            </div>
+          ) : highlights && highlights.highlights.length === 0 ? (
+            <div className="empty">
+              {highlights.note ?? `No highlights for @${highlights.username}.`}
+            </div>
+          ) : highlights ? (
+            <>
+              <h3 className="result-title">
+                {highlights.highlights.length} highlight(s) · @{highlights.username}
+              </h3>
+              <div className="highlight-grid">
+                {highlights.highlights.map((h) => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    className="highlight-card"
+                    onClick={() => void openHighlight(h)}
+                  >
+                    <span className="highlight-cover">
+                      {h.cover_url ? (
+                        <img src={h.cover_url} alt="" loading="lazy" />
+                      ) : (
+                        <span className="preview-empty">no cover</span>
+                      )}
+                    </span>
+                    <span className="highlight-title">{h.title || "Untitled"}</span>
+                    {h.item_count != null && (
+                      <span className="highlight-count">{h.item_count} item(s)</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
         </section>
       )}
 
@@ -528,6 +633,41 @@ function MediaCard({ item, baseName, index }: { item: MediaItem; baseName: strin
   );
 }
 
+/** One story/highlight still: poster preview + download + direct link. */
+function StoryMediaCard({
+  item,
+  baseName,
+  index,
+}: {
+  item: StoryItem;
+  baseName: string;
+  index: number;
+}) {
+  const ext = item.kind === "video" ? ".mp4" : ".jpg";
+
+  return (
+    <div className="media-card">
+      <div className="media-preview">
+        <img src={item.thumbnail_url ?? item.url} alt="" loading="lazy" />
+        <span className={`badge ${item.kind}`}>{item.kind.toUpperCase()}</span>
+        {item.expires_at && (
+          <span className="expires">expires in {hoursLeft(item.expires_at)}</span>
+        )}
+      </div>
+      <div className="media-actions">
+        <a
+          className="btn primary"
+          href={downloadUrl(item.url, `${baseName}_${index + 1}${ext}`)}
+        >
+          <IconDownload />
+          Download
+        </a>
+        <CopyLink url={item.url} />
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Icons (Lucide, inline SVG) ---------- */
 
 function Svg({ children }: { children: React.ReactNode }) {
@@ -599,6 +739,23 @@ function IconUser() {
     <Svg>
       <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
+    </Svg>
+  );
+}
+
+function IconBookmark() {
+  return (
+    <Svg>
+      <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
+    </Svg>
+  );
+}
+
+function IconArrowLeft() {
+  return (
+    <Svg>
+      <path d="m12 19-7-7 7-7" />
+      <path d="M19 12H5" />
     </Svg>
   );
 }

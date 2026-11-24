@@ -13,6 +13,8 @@ A full-stack web app to download publicly available Instagram media:
 - **Reel thumbnails**
 - **Profile pictures** (HD when available)
 - **Stories** (requires a logged-in `sessionid` cookie — see below)
+- **Story highlights** — every highlight album of a profile, with all its items (also
+  requires a session)
 
 ```
 ig/
@@ -139,6 +141,8 @@ Rollback: `docker images | grep ig-grabber` to find the previous SHA tag, then
 | `GET /api/profile/{username}`     | Profile info + profile picture URLs            |
 | `GET /api/post/{shortcode}`       | Post/reel media items (photo, video, carousel) |
 | `GET /api/stories/{username}`     | Active stories (`auth_configured` flag)        |
+| `GET /api/highlights/{username}`  | Highlight albums (`auth_configured` flag)      |
+| `GET /api/highlights/id/{id}`     | Media items of one highlight album             |
 | `GET /api/session`                | Whether the session cookie is configured+valid |
 | `POST /api/session`               | Renew the cookie live (`{"sessionid": "…"}`)   |
 | `GET /download?url=…&filename=…`  | Streams a CDN URL as a file attachment         |
@@ -153,4 +157,5 @@ All `/download` requests are restricted to Instagram CDN hosts (`*.cdninstagram.
   Service and creators' copyright — get permission before reusing anything.
 - Extraction depends on Instagram's unauthenticated endpoints; they change without notice and
   some networks/IPs get rate-limited. The UI surfaces those errors verbatim.
-- Stories always require the `sessionid` cookie, by Instagram's design.
+- Stories and highlights always require the `sessionid` cookie, by Instagram's design.
+  Highlight downloads are covered by the same personal-use/copyright caveat.
