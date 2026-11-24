@@ -1,3 +1,4 @@
+pub mod highlight;
 pub mod post;
 pub mod profile;
 pub mod story;

@@ -10,8 +10,11 @@ use serde_json::json;
 use crate::config::AppState;
 use crate::error::{ApiError, ApiResult};
 use crate::ig::util::{sanitize_username, valid_shortcode};
-use crate::ig::{post, profile, story};
-use crate::models::{PostResponse, ProfileResponse, SessionStatus, StoryResponse};
+use crate::ig::{highlight, post, profile, story};
+use crate::models::{
+    HighlightResponse, HighlightsResponse, PostResponse, ProfileResponse, SessionStatus,
+    StoryResponse,
+};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -19,6 +22,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/profile/{username}", get(get_profile))
         .route("/api/post/{shortcode}", get(get_post))
         .route("/api/stories/{username}", get(get_stories))
+        .route("/api/highlights/{username}", get(get_highlights))
+        .route("/api/highlights/id/{highlight_id}", get(get_highlight))
         .route("/api/session", get(get_session).post(update_session))
         .route("/download", get(download))
 }
@@ -30,6 +35,8 @@ async fn index() -> impl IntoResponse {
             "GET /api/profile/{username}",
             "GET /api/post/{shortcode}",
             "GET /api/stories/{username}",
+            "GET /api/highlights/{username}",
+            "GET /api/highlights/id/{highlight_id}",
             "GET /download?url=<cdn-url>&filename=<name>",
             "GET /health"
         ]
@@ -142,6 +149,54 @@ async fn get_stories(
     tracing::info!(username, "stories request");
     Ok(Json(
         story::fetch_stories(&state, &username, session).await?,
+    ))
+}
+
+async fn get_highlights(
+    State(state): State<AppState>,
+    Path(username): Path<String>,
+    headers: HeaderMap,
+) -> ApiResult<Json<HighlightsResponse>> {
+    let username = sanitize_username(&username)
+        .ok_or_else(|| ApiError::BadRequest("invalid username".into()))?;
+    let session = headers.get("x-session-id").and_then(|v| v.to_str().ok());
+    let store_has_session = state
+        .session
+        .read()
+        .expect("session lock poisoned")
+        .session_id
+        .is_some();
+    if session.is_some() || store_has_session {
+        state.pace_authed().await;
+    }
+    tracing::info!(username, "highlights request");
+    Ok(Json(
+        highlight::fetch_highlights(&state, &username, session).await?,
+    ))
+}
+
+async fn get_highlight(
+    State(state): State<AppState>,
+    Path(highlight_id): Path<String>,
+    headers: HeaderMap,
+) -> ApiResult<Json<HighlightResponse>> {
+    if !(1..=40).contains(&highlight_id.len()) || !highlight_id.chars().all(|c| c.is_ascii_digit())
+    {
+        return Err(ApiError::BadRequest("invalid highlight id".into()));
+    }
+    let session = headers.get("x-session-id").and_then(|v| v.to_str().ok());
+    let store_has_session = state
+        .session
+        .read()
+        .expect("session lock poisoned")
+        .session_id
+        .is_some();
+    if session.is_some() || store_has_session {
+        state.pace_authed().await;
+    }
+    tracing::info!(highlight_id, "highlight request");
+    Ok(Json(
+        highlight::fetch_highlight(&state, &highlight_id, session).await?,
     ))
 }
 

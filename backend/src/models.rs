@@ -78,6 +78,37 @@ pub struct StoryResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct HighlightSummary {
+    /// Numeric highlight id (without the `highlight:` prefix).
+    pub id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub item_count: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HighlightsResponse {
+    pub username: String,
+    /// Whether a sessionid cookie is configured — highlights need one.
+    pub auth_configured: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    pub highlights: Vec<HighlightSummary>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HighlightResponse {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    pub items: Vec<StoryItem>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct SessionStatus {
     /// Whether IG_SESSIONID is configured at all.
     pub configured: bool,
