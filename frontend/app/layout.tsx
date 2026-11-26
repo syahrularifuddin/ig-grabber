@@ -1,25 +1,30 @@
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono, Plus_Jakarta_Sans, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 // Same three families as halosyahrul.com: Plus Jakarta Sans (body),
-// Space Grotesk (display), JetBrains Mono (labels/meta).
-const sans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+// Space Grotesk (display), JetBrains Mono (labels/meta). Self-hosted: Google
+// Fonts intermittently answers `css2` with extensionless /l/font?kit= URLs,
+// which crashes next/font/google at build time (vercel/next.js#99114).
+const sans = localFont({
+  src: "./fonts/plus-jakarta-sans-latin.woff2",
+  weight: "400 700",
   variable: "--font-sans",
+  display: "swap",
 });
 
-const display = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+const display = localFont({
+  src: "./fonts/space-grotesk-latin.woff2",
+  weight: "500 700",
   variable: "--font-display",
+  display: "swap",
 });
 
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
+const mono = localFont({
+  src: "./fonts/jetbrains-mono-latin.woff2",
+  weight: "400 500",
   variable: "--font-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
