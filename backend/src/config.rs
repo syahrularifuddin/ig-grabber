@@ -198,6 +198,19 @@ pub fn build_client(ua: Option<&str>, session: Option<&str>) -> Client {
     build_client_with_emulation(Emulation::Safari26, ua, session)
 }
 
+/// A fresh cookie jar with the `sessionid` seeded for all of instagram.com
+/// (the web app sets it on `.instagram.com`, so i.instagram.com gets it too).
+fn cookie_jar(session: Option<&str>) -> wreq::cookie::Jar {
+    let jar = wreq::cookie::Jar::default();
+    if let Some(sid) = session {
+        jar.add(
+            format!("sessionid={sid}; Domain=instagram.com; Path=/; Secure; HttpOnly"),
+            "https://www.instagram.com/",
+        );
+    }
+    jar
+}
+
 /// Same, but with an explicit TLS emulation profile. The claimed UA and the
 /// TLS fingerprint must agree or Instagram soft-blocks with a redirect loop.
 pub fn build_client_with_emulation(
@@ -222,18 +235,14 @@ pub fn build_client_with_emulation(
     headers.insert("sec-fetch-dest", HeaderValue::from_static("empty"));
     headers.insert("sec-fetch-mode", HeaderValue::from_static("cors"));
     headers.insert("sec-fetch-site", HeaderValue::from_static("same-origin"));
-    if let Some(sid) = session {
-        if let Ok(v) = HeaderValue::from_str(&format!("sessionid={sid}")) {
-            headers.insert("cookie", v);
-        }
-    }
-
     let mut builder = Client::builder()
         .emulation(emulation)
-        // Keep Instagram's cookies (csrftoken, ds_user_id, rur…) across
-        // requests like a real browser — some api/v1 endpoints 302-loop
-        // when only the bare sessionid is sent.
-        .cookie_store(true)
+        // Seed the session through the jar, never a static `cookie` header.
+        // Instagram rejects an expired session by deleting the cookie
+        // (`Set-Cookie: sessionid=deleted`) and redirecting to `/`; a header
+        // is replayed on every redirect hop, so the client would bounce
+        // forever ("too many redirects"). A jar lets the deletion stick.
+        .cookie_provider(cookie_jar(session))
         // Instagram's CDN 302-redirects to video.xx.fbcdn.net etc.
         .redirect(wreq::redirect::Policy::limited(10));
     if let Some(ua) = ua {
@@ -244,4 +253,27 @@ pub fn build_client_with_emulation(
         .connect_timeout(Duration::from_secs(10))
         .build()
         .expect("failed to build HTTP client")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seeds_sessionid_for_web_and_app_hosts() {
+        let jar = cookie_jar(Some("abc123"));
+        for uri in ["https://www.instagram.com/", "https://i.instagram.com/"] {
+            let cookie: Vec<_> = jar
+                .matches(uri)
+                .filter(|c| c.name() == "sessionid")
+                .collect();
+            assert_eq!(cookie.len(), 1, "sessionid missing for {uri}");
+            assert_eq!(cookie[0].value(), "abc123");
+        }
+    }
+
+    #[test]
+    fn empty_session_leaves_jar_empty() {
+        assert!(cookie_jar(None).is_empty());
+    }
 }

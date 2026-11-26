@@ -160,6 +160,22 @@ export default function Home() {
     }
   }
 
+  async function pasteInput() {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!text) return;
+      setInput(text);
+      setError(null);
+    } catch {
+      setError("Clipboard unavailable — paste manually with ⌘V.");
+    }
+  }
+
+  function clearInput() {
+    setInput("");
+    setError(null);
+  }
+
   const isPostTab = tab === "reels" || tab === "photos";
 
   return (
@@ -194,6 +210,7 @@ export default function Home() {
           setSidInput={setSidInput}
           sidSaving={sidSaving}
           sidMsg={sidMsg}
+          setSidMsg={setSidMsg}
           saveSession={saveSession}
         />
       )}
@@ -240,6 +257,26 @@ export default function Home() {
             spellCheck={false}
             autoFocus
           />
+          <div className="input-actions">
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => void pasteInput()}
+              disabled={loading}
+            >
+              <IconClipboard />
+              Paste
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={clearInput}
+              disabled={!input}
+            >
+              <IconX />
+              Clear
+            </button>
+          </div>
           <button className="btn primary" type="submit" disabled={loading}>
             {loading ? (
               <span className="spinner" aria-label="loading" />
@@ -524,14 +561,32 @@ function SessionPanel({
   setSidInput,
   sidSaving,
   sidMsg,
+  setSidMsg,
   saveSession,
 }: {
   sidInput: string;
   setSidInput: (v: string) => void;
   sidSaving: boolean;
   sidMsg: string | null;
+  setSidMsg: (v: string | null) => void;
   saveSession: (e: React.FormEvent) => void;
 }) {
+  async function pasteSid() {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (!text) return;
+      setSidInput(text);
+      setSidMsg(null);
+    } catch {
+      setSidMsg("Clipboard unavailable — paste manually with ⌘V.");
+    }
+  }
+
+  function clearSid() {
+    setSidInput("");
+    setSidMsg(null);
+  }
+
   return (
     <form className="session-panel" onSubmit={saveSession}>
       <label>
@@ -549,6 +604,26 @@ function SessionPanel({
           spellCheck={false}
           autoComplete="off"
         />
+        <div className="input-actions">
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => void pasteSid()}
+            disabled={sidSaving}
+          >
+            <IconClipboard />
+            Paste
+          </button>
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={clearSid}
+            disabled={!sidInput}
+          >
+            <IconX />
+            Clear
+          </button>
+        </div>
         <button className="btn primary" type="submit" disabled={sidSaving || !sidInput.trim()}>
           {sidSaving ? <span className="spinner" aria-label="saving" /> : "Save session"}
         </button>
@@ -774,6 +849,24 @@ function IconBadgeCheck() {
     <Svg>
       <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z" />
       <path d="m9 12 2 2 4-4" />
+    </Svg>
+  );
+}
+
+function IconClipboard() {
+  return (
+    <Svg>
+      <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    </Svg>
+  );
+}
+
+function IconX() {
+  return (
+    <Svg>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
     </Svg>
   );
 }

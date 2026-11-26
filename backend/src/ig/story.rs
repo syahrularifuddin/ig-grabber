@@ -27,14 +27,31 @@ pub async fn check_session(state: &AppState) -> SessionStatus {
     }
 }
 
-/// Probe the reels tray feed — 200 means the cookie is accepted.
+/// Probe the reels tray feed — 200 means the cookie is accepted. Redirects
+/// are not followed: Instagram answers a rejected cookie with a 302 to the
+/// logged-out homepage, which would otherwise look like a success.
 pub async fn probe_tray(http: &wreq::Client) -> bool {
     matches!(
         http.get("https://www.instagram.com/api/v1/feed/reels_tray/")
+            .redirect(wreq::redirect::Policy::none())
             .send()
             .await,
         Ok(r) if r.status().is_success()
     )
+}
+
+/// A session-only flow that could not resolve its user id was most likely
+/// served the logged-out site. Probe the cookie once so the caller reports
+/// "renew your session" instead of a vague upstream error.
+pub(super) async fn ensure_session_live(http: &wreq::Client) -> ApiResult<()> {
+    if probe_tray(http).await {
+        Ok(())
+    } else {
+        Err(ApiError::Unauthorized(
+            "Instagram rejected the session cookie — it has expired; paste a fresh sessionid"
+                .into(),
+        ))
+    }
 }
 
 /// Fetch active stories for a user. Requires a `sessionid` cookie (env or
@@ -78,16 +95,17 @@ pub async fn fetch_stories(
             items: vec![],
         });
     }
-    if prof.user_id.is_empty() {
-        return Err(ApiError::Upstream(
-            "could not resolve the user id for stories — Instagram did not serve profile data, try again shortly".into(),
-        ));
-    }
-
     let http = match session_override {
         Some(sid) => build_client(None, Some(sid)),
         None => s.authed_http.clone(),
     };
+
+    if prof.user_id.is_empty() {
+        ensure_session_live(&http).await?;
+        return Err(ApiError::Upstream(
+            "could not resolve the user id for stories — Instagram did not serve profile data, try again shortly".into(),
+        ));
+    }
 
     let mut fb_dtsg = ensure_fb_dtsg(state, &http).await?;
     let mut items = stories_items(state, &http, &prof.user_id, &fb_dtsg).await?;
@@ -150,7 +168,7 @@ pub async fn fetch_stories(
 
 /// The cached `fb_dtsg` token for the graphql query, scraped from the
 /// homepage's `__eqmc` blob. Heavy (a ~1 MB page), so cached per process.
-async fn ensure_fb_dtsg(state: &AppState, http: &wreq::Client) -> ApiResult<String> {
+pub(super) async fn ensure_fb_dtsg(state: &AppState, http: &wreq::Client) -> ApiResult<String> {
     let mut cached = state.fb_dtsg.lock().await;
     if let Some(dtsg) = cached.as_ref() {
         return Ok(dtsg.clone());
@@ -187,10 +205,14 @@ async fn fetch_fb_dtsg(http: &wreq::Client) -> ApiResult<String> {
         .ok_or_else(|| ApiError::Upstream("homepage did not contain the fb_dtsg blob".into()))?;
     let v: Value = serde_json::from_str(obj)
         .map_err(|_| ApiError::Upstream("could not parse the fb_dtsg blob".into()))?;
-    v["f"]
-        .as_str()
-        .map(str::to_string)
-        .ok_or_else(|| ApiError::Upstream("fb_dtsg missing from homepage blob".into()))
+    // The logged-out homepage serves `"f":null`; only a live session gets a
+    // token. Reaching here without one means the cookie is no longer accepted.
+    v["f"].as_str().map(str::to_string).ok_or_else(|| {
+        ApiError::Unauthorized(
+            "Instagram served the logged-out homepage — the session cookie has expired; paste a fresh sessionid"
+                .into(),
+        )
+    })
 }
 
 /// POST the persisted stories query and return the `items` array of the
@@ -204,14 +226,40 @@ async fn stories_items(
     let variables = format!(
         r#"{{"reel_ids_arr":["{user_id}"],"__relay_internal__pv__PolarisCommunityNoteStoriesLabelEnabledrelayprovider":true}}"#
     );
+    let body = graphql(
+        state,
+        http,
+        fb_dtsg,
+        "PolarisStoriesV3ReelPageStandaloneQuery",
+        "39989351314045574",
+        &variables,
+    )
+    .await?;
+    Ok(
+        body["data"]["xdt_api__v1__feed__reels_media"]["reels_media"][0]["items"]
+            .as_array()
+            .cloned(),
+    )
+}
+
+/// POST a persisted (doc_id) query to the web graphql API and return the
+/// parsed body. Errors on auth rejection, non-2xx, or a graphql `errors` entry.
+pub(super) async fn graphql(
+    state: &AppState,
+    http: &wreq::Client,
+    fb_dtsg: &str,
+    friendly_name: &str,
+    doc_id: &str,
+    variables: &str,
+) -> ApiResult<Value> {
     // `lsd`/`__spin_*` mirror instagrapi's defaults; Instagram accepts them.
     let form = format!(
         "av=0&__d=www&__user=0&__a=1&__req=k&__hs=0&dpr=2&__ccg=UNKNOWN&__rev=0&\
          __comet_req=7&lsd=6b2800R9u4biJOYjcdXFEI&__spin_r=1011444902&__spin_b=trunk&\
          __spin_t=1708019550&fb_api_caller_class=RelayModern&\
-         fb_api_req_friendly_name=PolarisStoriesV3ReelPageStandaloneQuery&\
-         server_timestamps=true&variables={}&doc_id=39989351314045574&fb_dtsg={}",
-        form_urlencode(&variables),
+         fb_api_req_friendly_name={friendly_name}&\
+         server_timestamps=true&variables={}&doc_id={doc_id}&fb_dtsg={}",
+        form_urlencode(variables),
         form_urlencode(fb_dtsg),
     );
 
@@ -221,10 +269,7 @@ async fn stories_items(
         .header("accept", "*/*")
         .header("origin", "https://www.instagram.com")
         .header("referer", "https://www.instagram.com/")
-        .header(
-            "x-fb-friendly-name",
-            "PolarisStoriesV3ReelPageStandaloneQuery",
-        )
+        .header("x-fb-friendly-name", friendly_name)
         .header("x-asbd-id", "129477")
         .body(form)
         .send()
@@ -240,24 +285,19 @@ async fn stories_items(
     }
     if !(200..300).contains(&status) {
         return Err(ApiError::Upstream(format!(
-            "graphql stories request failed (HTTP {status})"
+            "graphql {friendly_name} request failed (HTTP {status})"
         )));
     }
     let body: Value = serde_json::from_str(
         &resp
             .text()
             .await
-            .map_err(|_| ApiError::Upstream("non-JSON graphql stories response".into()))?,
+            .map_err(|_| ApiError::Upstream("non-JSON graphql response".into()))?,
     )
-    .map_err(|_| ApiError::Upstream("non-JSON graphql stories response".into()))?;
+    .map_err(|_| ApiError::Upstream("non-JSON graphql response".into()))?;
 
     if let Some(msg) = body["errors"][0]["message"].as_str() {
         return Err(ApiError::Upstream(format!("graphql error: {msg}")));
     }
-
-    Ok(
-        body["data"]["xdt_api__v1__feed__reels_media"]["reels_media"][0]["items"]
-            .as_array()
-            .cloned(),
-    )
+    Ok(body)
 }

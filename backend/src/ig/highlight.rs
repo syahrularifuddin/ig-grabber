@@ -4,8 +4,8 @@ use crate::config::{build_client, AppState, SessionState};
 use crate::error::{ApiError, ApiResult};
 use crate::models::{HighlightResponse, HighlightSummary, HighlightsResponse, StoryItem};
 
-use super::profile;
 use super::util::{best_candidate, form_urlencode, value_to_string};
+use super::{profile, story};
 
 /// Fetch a user's story highlight albums. Highlights are session-only, like
 /// stories: the tray endpoint needs a logged-in `sessionid`.
@@ -42,57 +42,50 @@ pub async fn fetch_highlights(
             highlights: vec![],
         });
     }
-    if prof.user_id.is_empty() {
-        return Err(ApiError::Upstream(
-            "could not resolve the user id for highlights — Instagram did not serve profile data, try again shortly".into(),
-        ));
-    }
-
     let http = match session_override {
         Some(sid) => build_client(None, Some(sid)),
         None => s.authed_http.clone(),
     };
 
-    let url = format!(
-        "https://i.instagram.com/api/v1/highlights/{}/highlights_tray/",
-        prof.user_id
-    );
-    let resp = http
-        .get(&url)
-        .send()
-        .await
-        .map_err(|_| ApiError::Upstream("highlights request failed".into()))?;
-    // Instagram may have rolled the sessionid — adopt it before consuming.
-    state.capture_session_roll(resp.headers());
-    let status = resp.status().as_u16();
-    if status == 401 || status == 403 {
-        return Err(ApiError::Unauthorized(
-            "Instagram rejected the session cookie — it may be expired or invalid".into(),
+    if prof.user_id.is_empty() {
+        story::ensure_session_live(&http).await?;
+        return Err(ApiError::Upstream(
+            "could not resolve the user id for highlights — Instagram did not serve profile data, try again shortly".into(),
         ));
     }
-    if !(200..300).contains(&status) {
-        return Err(ApiError::Upstream(format!(
-            "highlights request failed (HTTP {status})"
-        )));
-    }
-    let body: Value = serde_json::from_str(
-        &resp
-            .text()
+
+    // The REST highlights_tray endpoint now 403s for every client; the web
+    // profile loads the tray through this persisted graphql query instead.
+    let tray = |body: &Value| body["data"]["highlights"]["edges"].as_array().cloned();
+    let variables = format!(r#"{{"user_id":"{}"}}"#, prof.user_id);
+    let run = |dtsg: String| {
+        let (http, variables) = (http.clone(), variables.clone());
+        async move {
+            story::graphql(
+                state,
+                &http,
+                &dtsg,
+                "PolarisProfileStoryHighlightsTrayContentQuery",
+                "26970053832668570",
+                &variables,
+            )
             .await
-            .map_err(|_| ApiError::Upstream("non-JSON highlights response".into()))?,
-    )
-    .map_err(|_| ApiError::Upstream("non-JSON highlights response".into()))?;
-
-    if let Some(msg) = body["message"].as_str() {
-        if body["status"].as_str() == Some("fail") {
-            return Err(ApiError::Upstream(format!("Instagram error: {msg}")));
         }
+    };
+    let mut edges = tray(&run(story::ensure_fb_dtsg(state, &http).await?).await?);
+    // A missing connection usually means the cached fb_dtsg expired —
+    // refresh it once and retry.
+    if edges.is_none() {
+        *state.fb_dtsg.lock().await = None;
+        edges = tray(&run(story::ensure_fb_dtsg(state, &http).await?).await?);
     }
 
-    let highlights = body["tray"]
-        .as_array()
-        .map(|tray| tray.iter().filter_map(summary_from_tray).collect())
-        .unwrap_or_default();
+    // ponytail: first page only (Instagram serves 100); follow page_info.end_cursor if someone has more.
+    let highlights = edges
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|e| summary_from_tray(&e["node"]))
+        .collect();
 
     Ok(HighlightsResponse {
         username: prof.username,

@@ -27,6 +27,12 @@ impl IntoResponse for ApiError {
 
 impl From<wreq::Error> for ApiError {
     fn from(e: wreq::Error) -> Self {
+        // Instagram bounces an expired session and soft-blocks with 302 loops.
+        if e.is_redirect() {
+            return ApiError::Upstream(
+                "Instagram kept redirecting the request (redirect loop) — the session cookie has likely expired; paste a fresh sessionid and retry".into(),
+            );
+        }
         ApiError::Upstream(format!("request to Instagram failed: {e}"))
     }
 }
