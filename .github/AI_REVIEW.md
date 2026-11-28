@@ -32,3 +32,5 @@ Production deployments remain separate from reviews: a bot approval does not mer
 `AI Review` is posted on the exact PR head: pending before review, success only after a strict zero-finding approval and final current-head/CI verification, failure on findings or processing errors. Failed/cancelled CI completion events also run the reviewer and invalidate an existing success when the latest CI attempt is not successful. CI remains separately required because reruns can start after a successful review, and GitHub offers no atomic CI/head/status transaction. Status-write errors fail the job; if GitHub refuses writes, the script cannot overwrite a previous status, so operators must inspect failed reviewer jobs and retain the independent required CI check.
 
 The required status context is named exactly `AI Review`.
+
+The required AI review check context is exactly `AI Review`.
