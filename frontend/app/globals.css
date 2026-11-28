@@ -5,39 +5,42 @@
 }
 
 /* Design system: Halo Syahrul (halosyahrul.com/docs/colors)
-   Cream canvas #FAF6EF · white cards · 1px line #ECE4D8 · amber brand #C9822E
-   teal #2F9E8F + lilac #7C6CD9 data hues · rose #D9636B for errors.
+   Leaf canvas #F4F7F0 · white cards · 1px line #DDE5D6 · leaf-green brand #17794D
+   burnt orange #A94511 + blue #2A63BD data hues · rose #B53844 for errors.
    Pill controls, 24px cards, 16px fields, two-layer soft shadow.
    Type: Space Grotesk (display) · Plus Jakarta Sans (body) · JetBrains Mono (labels). */
 
 :root {
-  --bg: #faf6ef;
-  --bg-soft: #f3ebdd;
-  --line: #ece4d8;
-  --line-strong: #e0d5c4;
-  --fg: #2a2420;
+  /* Base: canvas / rail / line, read from daisyUI base-100..300 + base-content */
+  --bg: #f4f7f0;
+  --bg-soft: #e8eee2;
+  --line: #dde5d6;
+  --line-strong: #cbd2c4;
+  --fg: #15241c;
   --card: #ffffff;
-  --muted: #7a6f64;
+  --muted: #57665d;
 
-  --primary: #c9822e;
-  --primary-hover: #b3721f;
+  /* Brand: leaf green, burnt orange, blue */
+  --primary: #17794d;
+  --primary-hover: #12633f;
   --on-primary: #ffffff;
-  --brand-soft: #fbebd3;
+  --brand-soft: #dcf0e3;
 
-  --teal: #2f9e8f;
-  --teal-soft: #ddf2ee;
-  --lilac: #7c6cd9;
-  --lilac-soft: #ece8fb;
-  --rose: #d9636b;
+  /* Soft data hues: the site's --hs-teal / --hs-lilac / --hs-rose */
+  --teal: #a94511;
+  --teal-soft: #fbe6da;
+  --lilac: #2a63bd;
+  --lilac-soft: #e1eafa;
+  --rose: #b53844;
   --rose-soft: #fbe3e3;
-  --terminal: #2a2420;
+  --terminal: #15241c;
 
   --radius: 24px;
   --radius-sm: 16px;
   --radius-pill: 999px;
-  --shadow-sm: 0 1px 2px rgba(60, 40, 20, 0.04), 0 8px 24px rgba(60, 40, 20, 0.06);
-  --shadow-hover: 0 16px 36px rgba(60, 40, 20, 0.13);
-  --ring: #c9822e;
+  --shadow-sm: 0 1px 2px rgba(20, 45, 30, 0.04), 0 8px 24px rgba(20, 45, 30, 0.06);
+  --shadow-hover: 0 16px 36px rgba(20, 45, 30, 0.13);
+  --ring: #17794d;
   --speed: 220ms;
 }
 
@@ -97,8 +100,8 @@ code {
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: linear-gradient(135deg, #f2a65a, var(--primary) 45%, var(--lilac));
-  box-shadow: 0 4px 14px rgba(201, 130, 46, 0.28);
+  background: linear-gradient(135deg, #5fd39b, var(--primary) 45%, var(--lilac));
+  box-shadow: 0 4px 14px rgba(23, 121, 77, 0.28);
 }
 
 /* ---------- Hero ---------- */
@@ -156,12 +159,12 @@ code {
 }
 
 .chip-ok {
-  color: var(--teal);
-  background: var(--teal-soft);
+  color: var(--primary);
+  background: var(--brand-soft);
 }
 
 .chip-ok:hover {
-  background: #cdeae4;
+  background: #cfe8d9;
 }
 
 .chip-bad {
@@ -170,7 +173,7 @@ code {
 }
 
 .chip-bad:hover {
-  background: #f8d5d6;
+  background: #f7d5d6;
 }
 
 .chip-off {
@@ -215,7 +218,7 @@ code {
   box-shadow: var(--shadow-sm);
 }
 
-/* Segmented tab track: pills sit on a warm rail, active = white pill */
+/* Segmented tab track: pills sit on a soft rail, active = white pill */
 .tabs {
   display: flex;
   gap: 4px;
@@ -251,7 +254,7 @@ code {
   color: var(--fg);
   border-color: var(--line);
   background: var(--card);
-  box-shadow: 0 1px 2px rgba(60, 40, 20, 0.05);
+  box-shadow: 0 1px 2px rgba(20, 45, 30, 0.05);
 }
 
 .tab svg {
@@ -285,11 +288,11 @@ code {
 
 .input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(201, 130, 46, 0.16);
+  box-shadow: 0 0 0 3px rgba(23, 121, 77, 0.16);
 }
 
 .input::placeholder {
-  color: #a89c8e;
+  color: #7e8c83;
 }
 
 /* ---------- Buttons ---------- */
@@ -350,7 +353,7 @@ code {
 /* ---------- Messages ---------- */
 
 .error {
-  border: 1px solid #f2cfd1;
+  border: 1px solid #f3cfd0;
   background: var(--rose-soft);
   color: var(--fg);
   border-radius: var(--radius-sm);
@@ -363,14 +366,14 @@ code {
 .error-hint {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #f2cfd1;
+  border-top: 1px solid #f3cfd0;
   color: var(--muted);
   font-size: 13px;
   font-weight: 400;
 }
 
 .notice {
-  border: 1px solid #f3ddb9;
+  border: 1px solid #c4e2d1;
   background: var(--brand-soft);
   border-radius: var(--radius-sm);
   padding: 16px 18px;
@@ -432,7 +435,7 @@ code {
 
 .kind-chip.reel {
   background: var(--brand-soft);
-  color: #8a5a12;
+  color: #8f3a0e;
 }
 
 .kind-chip.photo {
@@ -527,8 +530,8 @@ code {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 10.5px;
   font-weight: 500;
-  background: rgba(42, 36, 32, 0.82);
-  color: #f3ece2;
+  background: rgba(21, 36, 28, 0.82);
+  color: #e9f0ea;
 }
 
 .media-actions {
@@ -588,7 +591,7 @@ code {
 
 .badge.private {
   background: var(--brand-soft);
-  color: #8a5a12;
+  color: #8f3a0e;
   padding: 2px 10px;
   border-radius: var(--radius-pill);
   font-size: 10.5px;

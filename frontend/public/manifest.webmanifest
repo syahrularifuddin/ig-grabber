@@ -4,8 +4,8 @@
   "description": "Download Instagram reels, photos, thumbnails, profile pictures and stories.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#faf6ef",
-  "theme_color": "#c9822e",
+  "background_color": "#f4f7f0",
+  "theme_color": "#17794d",
   "icons": [
     {
       "src": "/icons/icon-192.png",
