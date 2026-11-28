@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- IG Grabber app icon: squircle, orange→lilac gradient, download glyph -->
+  <!-- IG Grabber app icon: squircle, leaf→blue gradient, download glyph -->
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#f2a65a"/>
-      <stop offset="45%" stop-color="#c9822e"/>
-      <stop offset="100%" stop-color="#7c6cd9"/>
+      <stop offset="0%" stop-color="#5fd39b"/>
+      <stop offset="45%" stop-color="#17794d"/>
+      <stop offset="100%" stop-color="#2a63bd"/>
     </linearGradient>
     <linearGradient id="sheen" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity=".25"/>
